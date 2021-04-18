@@ -1,0 +1,87 @@
+import numpy as np
+import pandas
+import math
+probability_array = np.zeros(shape=(5, 1))
+loc_array = np.zeros(shape=(5, 2))
+zeros_array = np.zeros(shape=(5, 2))
+probability_location_multipication = np.zeros(shape=(5, 2))
+sample = 0
+areas = []
+areas_interval = []
+index = [[]]
+
+Imported_Datas = pandas.read_csv\
+ ("artifical_trajectory.csv", sep=',', low_memory=False, names=['Gateway', 'RSSI', 'timestamp', 'x_axis', 'y_axis'])
+
+def rssi2weight_model(rssi):
+    k1 = 0.179604224169342
+    k2 = -0.035251798561151
+    n = -0.745683453237411
+    return (1 / (k1 * math.pow(10, (k2 * rssi + n)))) * (-1.4 * rssi + -30)
+
+def send_area(sum_probability_location_multipication):
+    if sum_probability_location_multipication[0] >= x_dimension_of_sampled_area/2:
+        if sum_probability_location_multipication[1] >= y_dimension_of_sampled_area / 2:
+            area = 'area1'
+        elif sum_probability_location_multipication[1] < y_dimension_of_sampled_area / 2:
+            area = 'area4'
+    elif sum_probability_location_multipication[0] < x_dimension_of_sampled_area/2:
+        if sum_probability_location_multipication[1] >= y_dimension_of_sampled_area / 2:
+            area = 'area2'
+        elif sum_probability_location_multipication[1] < y_dimension_of_sampled_area / 2:
+            area = 'area3'
+    return area
+
+
+def state_area(loc_array,probability_array):
+    total_of_five_probability = sum(probability_array)
+    #print(total_of_five_probability)
+    for i in range(0, 5):
+        probability_location_multipication[i] = loc_array[i]*probability_array[i]
+        loc_array[i] = 0
+        probability_array[i] = 0
+    sum_probability_location_multipication = sum(probability_location_multipication)/total_of_five_probability
+    stated_area = send_area(sum_probability_location_multipication)
+    return stated_area
+
+sample_number_imported_data = int(Imported_Datas.shape[0])-1
+x_dimension_of_sampled_area = 13 #input for x dimension of worked area
+y_dimension_of_sampled_area = 6  #input for y dimension of worked area
+
+area1 = [x_dimension_of_sampled_area/2, y_dimension_of_sampled_area/2], [x_dimension_of_sampled_area, y_dimension_of_sampled_area]
+area2 = [0, y_dimension_of_sampled_area/2], [x_dimension_of_sampled_area/2, y_dimension_of_sampled_area]
+area3 = [0, 0], [x_dimension_of_sampled_area/2, y_dimension_of_sampled_area/2]
+area4 = [x_dimension_of_sampled_area/2, 0], [x_dimension_of_sampled_area, y_dimension_of_sampled_area/2]
+
+area_intervals_dict = {'area1': area1,'area2': area2,'area3': area3,'area4': area4}
+
+poc1_loc = [x_dimension_of_sampled_area, 0]
+poc2_loc = [0, y_dimension_of_sampled_area]
+poc3_loc = [x_dimension_of_sampled_area, y_dimension_of_sampled_area]
+poc4_loc = [0, 0]
+
+gateway_to_its_location_dict = {'ituofispoc1': poc1_loc, 'ituofispoc2': poc2_loc,
+                                'ituofispoc3': poc3_loc, 'ituofispoc4': poc4_loc}
+
+for sample in range(1, sample_number_imported_data):
+    sample_of_five = sample % 5
+    a = gateway_to_its_location_dict[Imported_Datas['Gateway'][sample]][0]
+    b = loc_array[:, 0]
+    c = gateway_to_its_location_dict[Imported_Datas['Gateway'][sample]][1]
+    d = loc_array[:, 1]
+    if (gateway_to_its_location_dict[Imported_Datas['Gateway'][sample]][0] in loc_array[:,0]) and (gateway_to_its_location_dict[Imported_Datas['Gateway'][sample]][1] in loc_array[:,1]):
+        index = np.where(loc_array == gateway_to_its_location_dict[Imported_Datas['Gateway'][sample]])
+        probability_array[index[0][0]] = max(rssi2weight_model(Imported_Datas['RSSI'][sample]), probability_array[index[0][0]])
+        print(probability_array[index[0][0]])
+    else:
+        probability_array[sample_of_five] = rssi2weight_model(Imported_Datas['RSSI'][sample])
+        loc_array[sample_of_five] = gateway_to_its_location_dict[Imported_Datas['Gateway'][sample]]
+
+    if sample_of_five == 0:
+        area = state_area(loc_array, probability_array)
+        for i in range(0,5):
+            areas.append(area)
+            areas_interval.append(area_intervals_dict[area])
+
+Area_Csv = pandas.DataFrame(data={'areas': areas, 'interval_XYS_XYF': areas_interval})
+Area_Csv.to_csv('Area.csv', sep=',', index=False)
